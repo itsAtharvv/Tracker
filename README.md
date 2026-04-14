@@ -2,38 +2,48 @@
 
 An AI-driven athletic talent assessment application utilizing computer vision to evaluate athletic tests such as Sit-ups and Vertical Jumps directly from your browser.
 
-This project uses Streamlit, MediaPipe, OpenCV, and WebRTC to provide a self-hosted platform securely exposed to the web via Cloudflare Tunnels and STUN/TURN integration using Twilio.
+This project is built using Streamlit, MediaPipe, OpenCV, and WebRTC, designed natively to be deployed on Streamlit Community Cloud.
 
 ## Features
-- **Sit-up Tracker**: Analyze your posture and calculate repetitions in real-time.
-- **Vertical Jump Tracker**: Calibrate baseline height automatically and determine maximum vertical leap.
-- **Secure Auto-Tunnelling**: Comes with an automated PowerShell script to install dependencies, run the server, and expose it publicly via Cloudflare Tunnels for easy access on any device.
-- **TURN Server Support**: Built-in logic to utilize robust Twilio TURN servers.
+- **Live AI Detection**: Uses Google's MediaPipe Tasks API for fast, edge-based pose detection in your browser.
+- **Sit-up Tracker**: Analyze your posture and automatically calculate valid repetitions in real-time using hip geometry angles.
+- **Vertical Jump Tracker**: Calibrate baseline height dynamically and determine your maximum vertical leap via bounding box extrapolations.
+- **Mobile Friendly (WebRTC)**: Easily access the assessment feed via any smartphone or tablet camera.
 
-## Prerequisites
-- Windows OS (for `launch_server.ps1` compatibility).
-- Python 3.8+ installed and added to PATH.
+## Deployment on Streamlit Community Cloud
 
-## Installation and Launch
+This repository is pre-configured for seamless deployment.
 
-The easiest way to start the platform securely Exposed to the Internet is to use the provided Windows PowerShell script. 
-It auto-installs requirements, downloads the Cloudflare Tunnel executable (if missing), and launches both the Streamlit application and the tunnel safely.
+1. Fork or clone this repository to your GitHub account.
+2. Go to [Streamlit Community Cloud](https://share.streamlit.io/).
+3. Click "Create app", select your repository, specify `app.py` as your main file.
+4. **IMPORTANT**: In "Advanced settings" during setup (or in the App secrets later), you **must** configure your Twilio Environment Variables.
 
-```powershell
-.\launch_server.ps1
+### Twilio TURN Server (Crucial for Mobile Networks)
+Standard WebRTC (camera streaming) often fails on mobile data like 4G/5G due to strict NAT firewalls. To bypass this, you need a TURN server. We use Twilio for free robust TURN routing.
+Set these in your Streamlit Cloud Secrets:
+```toml
+TWILIO_ACCOUNT_SID = "your_account_sid_here"
+TWILIO_AUTH_TOKEN = "your_auth_token_here"
 ```
 
-A live public URL (e.g., `https://<random-subdomain>.trycloudflare.com`) will be provided in the terminal which you can use directly on your mobile device.
+## Running Locally
 
-### Manual Run
-If you prefer running locally without the tunnel, just use:
+To run this application locally for testing:
+
+1. Install dependencies:
 ```bash
 pip install -r requirements.txt
+```
+*(Note: Ensure your Python environment matches the deployment version, ideally Python >= 3.11).*
+
+2. Run the application:
+```bash
 streamlit run app.py
 ```
 
-## Environment Variables
-If you want to use the application over mobile data connections to bypass NAT firewalls efficiently, you can set the following environments:
-- `TWILIO_ACCOUNT_SID`: Your Twilio Account SID.
-- `TWILIO_AUTH_TOKEN`: Your Twilio Auth Token.
-If provided, the app will auto-configure an enterprise-grade TURN server to route the WebRTC video feeds.
+## File Structure
+
+- `app.py`: The core Streamlit application housing the UI, WebRTC connections, and MediaPipe logic.
+- `requirements.txt`: Python package requirements (auto-detected by Streamlit Cloud).
+- `packages.txt`: System-level dependencies for running headless OpenCV/MediaPipe in Linux cloud environments.
