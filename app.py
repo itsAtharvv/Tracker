@@ -157,8 +157,16 @@ rtc_configuration = RTCConfiguration({"iceServers": get_ice_servers()})
 # ==========================================
 # CV TARGET CALCULATION LOGIC
 # ==========================================
-mp_drawing = mp.solutions.drawing_utils
-mp_pose = mp.solutions.pose
+# Setup MediaPipe Tasks API
+import os
+from urllib.request import urlretrieve
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
+
+# Download the model if not present
+model_path = "pose_landmarker_lite.task"
+if not os.path.exists(model_path):
+    urlretrieve("https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task", model_path)
 
 def calculate_angle(a, b, c):
     """
@@ -177,7 +185,13 @@ def calculate_angle(a, b, c):
 # ==========================================
 class AssessmentVideoProcessor:
     def __init__(self):
-        self.pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+        # Initialize the modern PoseLandmarker
+        base_options = python.BaseOptions(model_asset_path=model_path)
+        options = vision.PoseLandmarkerOptions(
+            base_options=base_options,
+            output_segmentation_masks=False)
+        self.detector = vision.PoseLandmarker.create_from_options(options)
+        
         # Live Configurations
         self.mode = "Sit-up"
         self.user_height_cm = 170
@@ -201,14 +215,27 @@ class AssessmentVideoProcessor:
         
         # Mediapipe requires RGB
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img_rgb.flags.writeable = False
-        results = self.pose.process(img_rgb)
-        img_rgb.flags.writeable = True
         
-        if results.pose_landmarks:
-            # Draw MediaPipe Skeleton
-            mp_drawing.draw_landmarks(img, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
-            landmarks = results.pose_landmarks.landmark
+        # Process using Tasks API
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_rgb)
+        detection_result = self.detector.detect(mp_image)
+        
+        if detection_result.pose_landmarks:
+            landmarks = detection_result.pose_landmarks[0]
+            
+            # Legacy enum indices hardcoded
+            LEFT_EYE = 2
+            LEFT_SHOULDER = 11
+            LEFT_HIP = 23
+            RIGHT_HIP = 24
+            LEFT_KNEE = 25
+            LEFT_HEEL = 29
+            
+            # Simple skeleton visualization
+            key_joints = [LEFT_SHOULDER, LEFT_HIP, LEFT_KNEE, RIGHT_HIP]
+            for joint in key_joints:
+                x, y = int(landmarks[joint].x * W), int(landmarks[joint].y * H)
+                cv2.circle(img, (x, y), 8, (0, 255, 0), -1)
             
             # ---------------------
             # SIT-UP LOGIC
@@ -216,9 +243,9 @@ class AssessmentVideoProcessor:
             if self.mode == "Sit-up":
                 try:
                     # Extract 2D locations for Left Shoulder, Hip, and Knee
-                    shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
-                    hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x, landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
-                    knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+                    shoulder = [landmarks[LEFT_SHOULDER].x, landmarks[LEFT_SHOULDER].y]
+                    hip = [landmarks[LEFT_HIP].x, landmarks[LEFT_HIP].y]
+                    knee = [landmarks[LEFT_KNEE].x, landmarks[LEFT_KNEE].y]
 
                     angle = calculate_angle(shoulder, hip, knee)
 
@@ -242,13 +269,13 @@ class AssessmentVideoProcessor:
             elif self.mode == "Vertical Jump":
                 try:
                     # Capture Mid-hip Y Coordinate
-                    left_hip = landmarks[mp_pose.PoseLandmark.LEFT_HIP.value]
-                    right_hip = landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value]
+                    left_hip = landmarks[LEFT_HIP]
+                    right_hip = landmarks[RIGHT_HIP]
                     mid_hip_y = (left_hip.y + right_hip.y) / 2.0 * H
 
                     # Extrapolate full body pixel height from Eye to Heel for scaling
-                    left_heel = landmarks[mp_pose.PoseLandmark.LEFT_HEEL.value]
-                    left_eye = landmarks[mp_pose.PoseLandmark.LEFT_EYE.value]
+                    left_heel = landmarks[LEFT_HEEL]
+                    left_eye = landmarks[LEFT_EYE]
                     body_pixel_height = abs(left_heel.y - left_eye.y) * H
 
                     # Phase 1: Callibrate the first 30 frames to establish 'baseline_y' coordinate
