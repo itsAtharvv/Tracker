@@ -157,8 +157,8 @@ rtc_configuration = RTCConfiguration({"iceServers": get_ice_servers()})
 # ==========================================
 # CV TARGET CALCULATION LOGIC
 # ==========================================
-import mediapipe.python.solutions.drawing_utils as mp_drawing
-import mediapipe.python.solutions.pose as mp_pose
+mp_drawing = mp.solutions.drawing_utils
+mp_pose = mp.solutions.pose
 
 def calculate_angle(a, b, c):
     """
